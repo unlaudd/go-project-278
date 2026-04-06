@@ -23,11 +23,13 @@ jobs:
       - name: Tidy modules
         run: go mod tidy
 
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
       - name: Run linter
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: --timeout=5m
+        run: golangci-lint run --timeout=5m
+        env:
+          GOWORK: off  # Отключаем workspace mode для совместимости
 
       - name: Run tests with race detector
         run: go test -race -v -coverprofile=coverage.out ./...
