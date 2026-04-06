@@ -1,0 +1,36 @@
+# === Binaries ===
+# Скомпилированные исполняемые файлы
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# === IDE & Editors ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# === Environment & Secrets ===
+.env
+.env.local
+.env.*.local
+config.yml
+
+# === OS Files ===
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# === Coverage & Test Artifacts ===
+coverage.out
+coverage.txt

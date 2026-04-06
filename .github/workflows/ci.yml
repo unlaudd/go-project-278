@@ -63,14 +63,13 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: true
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          args: --timeout=5m
           only-new-issues: false
 
   # 🔹 Сборка
@@ -94,4 +93,4 @@ jobs:
       - name: Verify binary
         run: |
           test -f shortener
-          echo "✅ Binary built successfully"
+          echo "Binary built successfully"
