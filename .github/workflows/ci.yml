@@ -6,60 +6,45 @@ on:
   pull_request:
     branches: [ main, master ]
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  # Тесты
-  test:
-    name: Test & Race Detection
+  test-and-lint:
+    name: Test & Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-          cache: true
-      
-      - run: go mod download
-      
-      - run: go test -race -v -coverprofile=coverage.out ./...
-      
-      - uses: codecov/codecov-action@v4
-        with:
-          file: ./coverage.out
-          fail_ci_if_error: false
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  # Линтер
-  lint:
-    name: Lint with golangci-lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-go@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.24'
           cache: true
-      
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
 
-  # Сборка
+      - name: Download deps
+        run: go mod download
+
+      - name: Run linter
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64
+          args: --timeout=5m
+
+      - name: Run tests with race detector
+        run: go test -race -v -coverprofile=coverage.out ./...
+
   build:
-    name: Build Application
+    name: Build
     runs-on: ubuntu-latest
-    needs: [ test, lint ]
+    needs: test-and-lint
     steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-go@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.24'
           cache: true
-      
-      - run: go build -v -o shortener ./cmd/url-shortener
-      - run: test -f shortener && echo " Binary built successfully"
+
+      - name: Build
+        run: go build -v -o shortener ./cmd/url-shortener
