@@ -35,10 +35,10 @@ func NewRouter() *gin.Engine {
 		c.String(http.StatusOK, "pong")
 	})
 
-	// 🧪 Тестовый эндпоинт для проверки Sentry (раскомментируйте при необходимости)
-	// router.GET("/debug/error", func(c *gin.Context) {
-	// 	panic("test error for Sentry verification")
-	// })
+	// 🧪 Тестовый эндпоинт для проверки Sentry
+	router.GET("/debug/error", func(c *gin.Context) {
+	 	panic("test error for Sentry verification")
+	})
 
 	return router
 }
