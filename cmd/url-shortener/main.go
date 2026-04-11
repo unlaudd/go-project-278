@@ -1,3 +1,4 @@
+// cmd/url-shortener/main.go
 package main
 
 import (
@@ -10,23 +11,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// NewRouter создаёт роутер с подключёнными middleware
+// NewRouter создаёт роутер с подключёнными middleware.
+// Вынесен отдельно для удобства тестирования.
 func NewRouter() *gin.Engine {
-	router := gin.Default()
+	router := gin.Default() // включает Logger + Recovery
 
-	// 🪵 Подключаем Sentry (только если задан DSN)
+	// 🪵 Подключаем Sentry, если задан DSN
 	if dsn := os.Getenv("SENTRY_DSN"); dsn != "" {
 		err := sentry.Init(sentry.ClientOptions{
-			Dsn:              dsn,
-			EnableTracing:    false, // можно включить позже
-			TracesSampleRate: 0,
-			Environment:      os.Getenv("ENVIRONMENT"), // "production", "staging" и т.д.
+			Dsn:         dsn,
+			Environment: os.Getenv("ENVIRONMENT"),
 		})
 		if err != nil {
 			log.Printf("[Sentry] Init failed: %v", err)
 		} else {
 			log.Println("[Sentry] Initialized")
-			// Подключаем middleware для Gin
 			router.Use(sentrygin.New(sentrygin.Options{}))
 		}
 	}
@@ -36,11 +35,10 @@ func NewRouter() *gin.Engine {
 		c.String(http.StatusOK, "pong")
 	})
 
-	// 🧪 Тестовый эндпоинт для генерации ошибки (только для проверки!)
-	//router.GET("/debug/error", func(c *gin.Context) {
-	//	// Имитируем панику — Sentry должен её перехватить
-	//	panic("test error for Sentry verification")
-	//})
+	// 🧪 Тестовый эндпоинт для проверки Sentry (раскомментируйте при необходимости)
+	// router.GET("/debug/error", func(c *gin.Context) {
+	// 	panic("test error for Sentry verification")
+	// })
 
 	return router
 }
@@ -53,14 +51,9 @@ func main() {
 		port = "8080"
 	}
 
-	// Graceful shutdown для отправки оставшихся событий в Sentry
-	go func() {
-		if err := router.Run(":" + port); err != nil {
-			log.Fatalf("Server failed to start: %v", err)
-		}
-	}()
-
-	// Ожидаем сигнал завершения
-	// (в реальном проекте добавьте обработку os.Interrupt, syscall.SIGTERM)
-	select {}
+	// Запускаем сервер
+	// Ошибка запуска логируется и завершает процесс
+	if err := router.Run(":" + port); err != nil {
+		log.Fatalf("Server failed to start: %v", err)
+	}
 }

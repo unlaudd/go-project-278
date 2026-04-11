@@ -25,6 +25,9 @@ lint:
 lint-fix:
 	golangci-lint run --fix
 
+fmt:
+	gofmt -w .
+
 deps:
 	go mod tidy
 	go get -u github.com/gin-gonic/gin
