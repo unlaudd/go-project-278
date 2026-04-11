@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
++ #!/bin/sh
 set -euo pipefail
 
 echo "[run.sh] Starting service"
