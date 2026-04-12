@@ -107,15 +107,16 @@ func NewRouter() *gin.Engine {
 }
 
 func main() {
-	router := NewRouter()
+    router := NewRouter()
 
-	port := os.Getenv("BACKEND_PORT")
-	if port == "" {
-		port = "9000"
-	}
+    // В продакшене слушаем на 8080 (Caddy проксирует на этот порт)
+    port := os.Getenv("BACKEND_PORT")
+    if port == "" {
+        port = "8080"
+    }
 
-	log.Printf("Backend starting on port %s", port)
-	if err := router.Run(":" + port); err != nil {
-		log.Fatalf("Server failed: %v", err)
-	}
+    log.Printf("Backend starting on port %s", port)
+    if err := router.Run(":" + port); err != nil {
+        log.Fatalf("Server failed: %v", err)
+    }
 }
