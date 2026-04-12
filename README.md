@@ -54,3 +54,27 @@ curl -g "https://.../api/links?range=[10,19]"
 
 # Без пагинации (дефолт [0,9])
 curl "https://.../api/links"
+```
+
+## Локальная разработка
+
+### Требования
+- Go ≥ 1.24
+- Node.js ≥ 20 (LTS)
+- PostgreSQL (локально или через Docker)
+
+### Запуск
+```bash
+# Установите зависимости
+go mod download
+npm install
+```
+
+# Запустите фронтенд и бэкенд одновременно
+```bash
+npm run dev
+```
+
+Фронтенд: http://localhost:5173
+
+API: http://localhost:8080
