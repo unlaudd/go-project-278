@@ -5,8 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-    "time"
-    "github.com/gin-contrib/cors"
+	"time"
+
+	"github.com/gin-contrib/cors"
 
 	"github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
@@ -35,15 +36,15 @@ func NewRouter() *gin.Engine {
 		}
 	}
 
-    // 🔐 CORS для локальной разработки
-    router.Use(cors.New(cors.Config{
-        AllowOrigins:     []string{"http://localhost:5173"},
-        AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-        AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
-        ExposeHeaders:    []string{"Content-Range"},
-        AllowCredentials: true,
-        MaxAge:           12 * time.Hour,
-    }))
+	// 🔐 CORS для локальной разработки
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
+		ExposeHeaders:    []string{"Content-Range"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	// 🗃️ Подключаем БД
 	dbURL := os.Getenv("DATABASE_URL")
@@ -106,15 +107,15 @@ func NewRouter() *gin.Engine {
 }
 
 func main() {
-    router := NewRouter()
+	router := NewRouter()
 
-    port := os.Getenv("BACKEND_PORT")
-    if port == "" {
-        port = "9000"
-    }
+	port := os.Getenv("BACKEND_PORT")
+	if port == "" {
+		port = "9000"
+	}
 
-    log.Printf("Backend starting on port %s", port)
-    if err := router.Run(":" + port); err != nil {
-        log.Fatalf("Server failed: %v", err)
-    }
+	log.Printf("Backend starting on port %s", port)
+	if err := router.Run(":" + port); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
 }
