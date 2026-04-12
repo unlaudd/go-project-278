@@ -9,20 +9,17 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/bin/app ./cmd/url-shortener
 
-# === Stage 2: Build Frontend ===
+# === Stage 2: Prepare Frontend ===
 FROM node:20-alpine AS frontend-builder
 WORKDIR /frontend
 
 # Копируем только package-файлы для кэширования
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --omit=dev  # устанавливаем только production-зависимости
 
-# Копируем исходники фронтенда
-COPY . .
-
-# ИСПРАВЛЕНИЕ: используем vite build вместо start-... --build
-# Vite по умолчанию кладет сборку в ./dist
-RUN npx vite build --outDir /frontend/dist
+# 🔹 Копируем готовые статики из установленного пакета
+# Пакет уже содержит собранный dist/
+RUN cp -r /frontend/node_modules/@hexlet/project-url-shortener-frontend/dist /frontend/dist
 
 # === Stage 3: Runtime with Caddy ===
 FROM caddy:2.8-alpine
