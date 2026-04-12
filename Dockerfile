@@ -10,22 +10,17 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/bin/app ./cmd/url-sho
 # === Stage 2: Prepare Frontend ===
 FROM node:20-alpine AS frontend-builder
 WORKDIR /frontend
-
-# Копируем только package-файлы для кэширования
 COPY package*.json ./
-RUN npm ci --omit=dev  # устанавливаем только production-зависимости
-
-# 🔹 Копируем готовые статики из установленного пакета
-# Пакет уже содержит собранный dist/
+RUN npm ci --omit=dev
 RUN cp -r /frontend/node_modules/@hexlet/project-url-shortener-frontend/dist /frontend/dist
 
 # === Stage 3: Runtime with Caddy ===
 FROM caddy:2.8-alpine
 
 # Устанавливаем postgres-client для goose и ca-certificates
-RUN apk --no-cache add postgresql-client ca-certificates
+RUN apk --no-cache add postgresql-client ca-certificates wget
 
-# 🔹 Копируем конфиг Caddy в место, которое он ожидает по умолчанию
+# Копируем конфиг Caddy
 COPY Caddyfile /etc/caddy/Caddyfile
 
 # Копируем фронтенд
@@ -37,17 +32,17 @@ COPY --from=backend-builder /app/bin/app /app/bin/app
 # Копируем миграции
 COPY --from=backend-builder /src/db/migrations /app/db/migrations
 
-# 🔹 Скачиваем готовый бинарник goose
+# Скачиваем готовый бинарник goose
 RUN wget -q -O /usr/local/bin/goose \
     https://github.com/pressly/goose/releases/download/v3.20.0/goose_linux_x86_64 && \
     chmod +x /usr/local/bin/goose
 
-# Копируем скрипт запуска
+# Скрипт запуска
 COPY bin/run.sh /app/bin/run.sh
 RUN chmod +x /app/bin/run.sh
 
-EXPOSE {$PORT:8080}
+# 🔹 EXPOSE принимает только литерал
+EXPOSE 8080
 
-# 🔹 НЕ переопределяем ENTRYPOINT — пусть Caddy использует свой стандартный
-# Вместо CMD используем run.sh, который запустит бэкенд + Caddy
+# Запуск через run.sh
 CMD ["/app/bin/run.sh"]
