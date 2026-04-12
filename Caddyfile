@@ -1,13 +1,13 @@
-:8080 {
+:{$PORT:8080} {
     # 📦 Раздаём статику фронтенда
     root * /app/frontend/dist
     file_server
 
-    # 🔁 Проксируем API на бэкенд
-    reverse_proxy /api/* localhost:9000
-    reverse_proxy /r/* localhost:9000
+    # 🔁 Проксируем API и редиректы на бэкенд
+    reverse_proxy /api/* {$BACKEND_HOST:localhost}:{$BACKEND_PORT:9000}
+    reverse_proxy /r/* {$BACKEND_HOST:localhost}:{$BACKEND_PORT:9000}
 
-    # 🪪 Обработка CORS для продакшена (опционально, если фронтенд на том же домене)
+    # 🪪 CORS (опционально, но полезно)
     header {
         +Access-Control-Allow-Origin *
         +Access-Control-Allow-Methods GET,POST,PUT,DELETE,OPTIONS

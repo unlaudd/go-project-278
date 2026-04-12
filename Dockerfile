@@ -22,10 +22,10 @@ RUN cp -r /frontend/node_modules/@hexlet/project-url-shortener-frontend/dist /fr
 # === Stage 3: Runtime with Caddy ===
 FROM caddy:2.8-alpine
 
-# Устанавливаем зависимости и явно выставляем права на caddy
-RUN apk --no-cache add postgresql-client ca-certificates && \
-    chmod 755 /usr/bin/caddy
+# Устанавливаем postgres-client для goose и ca-certificates
+RUN apk --no-cache add postgresql-client ca-certificates
 
+# 🔹 Копируем конфиг Caddy в место, которое он ожидает по умолчанию
 COPY Caddyfile /etc/caddy/Caddyfile
 
 # Копируем фронтенд
@@ -37,14 +37,17 @@ COPY --from=backend-builder /app/bin/app /app/bin/app
 # Копируем миграции
 COPY --from=backend-builder /src/db/migrations /app/db/migrations
 
-# 🔹 Скачиваем готовый бинарник goose (amd64, Linux)
+# 🔹 Скачиваем готовый бинарник goose
 RUN wget -q -O /usr/local/bin/goose \
     https://github.com/pressly/goose/releases/download/v3.20.0/goose_linux_x86_64 && \
     chmod +x /usr/local/bin/goose
 
-# Скрипт запуска
+# Копируем скрипт запуска
 COPY bin/run.sh /app/bin/run.sh
 RUN chmod +x /app/bin/run.sh
 
-EXPOSE 8080
+EXPOSE {$PORT:8080}
+
+# 🔹 НЕ переопределяем ENTRYPOINT — пусть Caddy использует свой стандартный
+# Вместо CMD используем run.sh, который запустит бэкенд + Caddy
 CMD ["/app/bin/run.sh"]
