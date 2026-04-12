@@ -78,3 +78,16 @@ npm run dev
 Фронтенд: http://localhost:5173
 
 API: http://localhost:8080
+
+### Аналитика посещений
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| `GET` | `/r/:code` | Редирект на оригинал + запись визита |
+| `GET` | `/api/link_visits` | Список посещений с пагинацией |
+
+**Пример запроса посещений:**
+```bash
+curl -g "https://.../api/link_visits?range=[0,9]"
+# Content-Range: link_visits 0-9/42
+# → [{"id":1, "ip":"...", "status":301, ...}]
