@@ -8,8 +8,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"url-shortener/url-shortener/internal/handler"
@@ -354,4 +356,17 @@ func TestParseRange(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Тест: невалидный URL
+func TestCreateLink_InvalidURL(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := createTestContext(w, "POST", "/api/links", nil)
+	c.Request.Body = io.NopCloser(strings.NewReader(`{"original_url":"not-a-url"}`))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	h.Create(c)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), "url")
 }

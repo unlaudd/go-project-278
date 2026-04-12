@@ -2,8 +2,10 @@ package handler
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strconv"
+	"time"
 
 	"url-shortener/internal/repository"
 	"url-shortener/internal/utils"
@@ -20,35 +22,38 @@ func NewLinkHandler(repo repository.LinkRepository, baseURL string) *LinkHandler
 	return &LinkHandler{repo: repo, baseURL: baseURL}
 }
 
+// POST /api/links
 func (h *LinkHandler) Create(c *gin.Context) {
 	var req struct {
-		OriginalURL string `json:"original_url" binding:"required"`
-		ShortName   string `json:"short_name"`
+		OriginalURL string  `json:"original_url" binding:"required,url"`
+		ShortName   *string `json:"short_name" binding:"omitempty,min=3,max=32"`
 	}
+
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		handleBindError(c, err)
 		return
 	}
 
+	// Генерируем short_name, если не передан или пустой
 	shortName := req.ShortName
-	if shortName == "" {
-		shortName = generateShortName(8)
+	if shortName == nil || *shortName == "" {
+		gen := generateShortName()
+		shortName = &gen
 	}
 
+	// Создаём структуру ссылки
 	link := &repository.Link{
 		OriginalURL: req.OriginalURL,
-		ShortName:   shortName,
+		ShortName:   *shortName,
 	}
 
+	// repo.Create возвращает только error
 	if err := h.repo.Create(c.Request.Context(), link, h.baseURL); err != nil {
-		if err.Error() == "short_name already exists" {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create link"})
+		handleDBError(c, err)
 		return
 	}
 
+	// Возвращаем 201 + заполненную ссылку
 	c.JSON(http.StatusCreated, link)
 }
 
@@ -107,34 +112,29 @@ func (h *LinkHandler) List(c *gin.Context) {
 }
 
 func (h *LinkHandler) Update(c *gin.Context) {
-	id, err := parseID(c.Param("id"))
+	idStr := c.Param("id")
+	id, err := strconv.ParseInt(idStr, 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid link id"})
 		return
 	}
 
 	var req struct {
-		OriginalURL *string `json:"original_url"`
-		ShortName   *string `json:"short_name"`
+		OriginalURL *string `json:"original_url" binding:"omitempty,url"`
+		ShortName   *string `json:"short_name" binding:"omitempty,min=3,max=32"`
 	}
+
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		handleBindError(c, err)
 		return
 	}
 
-	link, err := h.repo.Update(c.Request.Context(), id, req.OriginalURL, req.ShortName, h.baseURL)
+	link, err := h.repo.Update(c.Request.Context(), int32(id), req.OriginalURL, req.ShortName, h.baseURL)
 	if err != nil {
-		if err.Error() == "link not found" {
-			c.JSON(http.StatusNotFound, gin.H{"error": "link not found"})
-			return
-		}
-		if err.Error() == "short_name already exists" {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update link"})
+		handleDBError(c, err)
 		return
 	}
+
 	c.JSON(http.StatusOK, link)
 }
 
@@ -161,11 +161,12 @@ func parseID(s string) (int32, error) {
 	return int32(v), err
 }
 
-func generateShortName(length int) string {
-	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	result := make([]byte, length)
-	for i := range result {
-		result[i] = chars[i%len(chars)]
+func generateShortName() string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, 8)
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for i := range b {
+		b[i] = charset[rng.Intn(len(charset))]
 	}
-	return string(result)
+	return string(b)
 }
