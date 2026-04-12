@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.4
-
 # === Stage 1: Build Go backend ===
 FROM golang:1.25-alpine AS backend-builder
 RUN apk add --no-cache git bash
