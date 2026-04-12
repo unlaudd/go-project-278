@@ -1,14 +1,12 @@
 package handler
 
 import (
-	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
-	"strings"
+
+	"url-shortener/internal/repository"
 
 	"github.com/gin-gonic/gin"
-	"url-shortener/internal/repository"
 )
 
 type LinkHandler struct {
@@ -20,7 +18,6 @@ func NewLinkHandler(repo repository.LinkRepository, baseURL string) *LinkHandler
 	return &LinkHandler{repo: repo, baseURL: baseURL}
 }
 
-// POST /api/links
 func (h *LinkHandler) Create(c *gin.Context) {
 	var req struct {
 		OriginalURL string `json:"original_url" binding:"required"`
@@ -31,10 +28,9 @@ func (h *LinkHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Если short_name не указан — генерируем
 	shortName := req.ShortName
 	if shortName == "" {
-		shortName = generateShortName(6) // простая генерация
+		shortName = generateShortName(8)
 	}
 
 	link := &repository.Link{
@@ -54,10 +50,8 @@ func (h *LinkHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, link)
 }
 
-// GET /api/links/:id
 func (h *LinkHandler) GetByID(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseID(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
@@ -72,22 +66,19 @@ func (h *LinkHandler) GetByID(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get link"})
 		return
 	}
-
 	c.JSON(http.StatusOK, link)
 }
 
-// GET /api/links
 func (h *LinkHandler) List(c *gin.Context) {
-	limit := 100
-	offset := 0
+	limit, offset := int32(100), int32(0)
 	if l := c.Query("limit"); l != "" {
 		if v, err := strconv.Atoi(l); err == nil && v > 0 {
-			limit = v
+			limit = int32(v)
 		}
 	}
 	if o := c.Query("offset"); o != "" {
 		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
-			offset = v
+			offset = int32(v)
 		}
 	}
 
@@ -96,14 +87,11 @@ func (h *LinkHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list links"})
 		return
 	}
-
 	c.JSON(http.StatusOK, links)
 }
 
-// PUT /api/links/:id
 func (h *LinkHandler) Update(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseID(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
@@ -131,14 +119,11 @@ func (h *LinkHandler) Update(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update link"})
 		return
 	}
-
 	c.JSON(http.StatusOK, link)
 }
 
-// DELETE /api/links/:id
 func (h *LinkHandler) Delete(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := parseID(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
@@ -152,16 +137,19 @@ func (h *LinkHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete link"})
 		return
 	}
-
 	c.Status(http.StatusNoContent)
 }
 
-// Простая генерация короткого имени (base62)
+func parseID(s string) (int32, error) {
+	v, err := strconv.ParseInt(s, 10, 32)
+	return int32(v), err
+}
+
 func generateShortName(length int) string {
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, length)
 	for i := range result {
-		result[i] = chars[i%len(chars)] // упрощённо; в продакшене используйте crypto/rand
+		result[i] = chars[i%len(chars)]
 	}
 	return string(result)
 }

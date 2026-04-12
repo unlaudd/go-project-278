@@ -26,7 +26,7 @@ lint-fix:
 	golangci-lint run --fix
 
 fmt:
-	gofmt -w .
+	goimports -w .
 
 deps:
 	go mod tidy
