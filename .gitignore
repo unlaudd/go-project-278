@@ -34,3 +34,9 @@ Desktop.ini
 # === Coverage & Test Artifacts ===
 coverage.out
 coverage.txt
+
+# Node.js
+node_modules/
+npm-debug.log*
+dist/
+build/

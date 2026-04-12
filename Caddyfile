@@ -1,0 +1,17 @@
+:8080 {
+    # 📦 Раздаём статику фронтенда
+    root * /app/frontend/dist
+    file_server
+
+    # 🔁 Проксируем API на бэкенд
+    reverse_proxy /api/* localhost:9000
+    reverse_proxy /r/* localhost:9000
+
+    # 🪪 Обработка CORS для продакшена (опционально, если фронтенд на том же домене)
+    header {
+        +Access-Control-Allow-Origin *
+        +Access-Control-Allow-Methods GET,POST,PUT,DELETE,OPTIONS
+        +Access-Control-Allow-Headers Content-Type,Accept
+        +Access-Control-Expose-Headers Content-Range
+    }
+}
