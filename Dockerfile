@@ -39,8 +39,10 @@ COPY --from=backend-builder /app/bin/app /app/bin/app
 # Копируем миграции
 COPY --from=backend-builder /src/db/migrations /app/db/migrations
 
-# 🔹 Копируем goose из backend-builder (вместо установки через go install)
-COPY --from=backend-builder /go/bin/goose /usr/local/bin/goose
+# 🔹 Скачиваем готовый бинарник goose (amd64, Linux)
+RUN wget -q -O /usr/local/bin/goose \
+    https://github.com/pressly/goose/releases/download/v3.20.0/goose_linux_x86_64 && \
+    chmod +x /usr/local/bin/goose
 
 # Скрипт запуска
 COPY bin/run.sh /app/bin/run.sh
