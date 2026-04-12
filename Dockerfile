@@ -39,11 +39,8 @@ COPY --from=backend-builder /app/bin/app /app/bin/app
 # Копируем миграции
 COPY --from=backend-builder /src/db/migrations /app/db/migrations
 
-# 🔹 Устанавливаем goose прямо в финальном образе (проще и надёжнее)
-RUN apk add --no-cache git && \
-    go install github.com/pressly/goose/v3/cmd/goose@latest && \
-    mv /go/bin/goose /usr/local/bin/goose && \
-    apk del git
+# 🔹 Копируем goose из backend-builder (вместо установки через go install)
+COPY --from=backend-builder /go/bin/goose /usr/local/bin/goose
 
 # Скрипт запуска
 COPY bin/run.sh /app/bin/run.sh
