@@ -22,6 +22,9 @@ RUN npx start-hexlet-url-shortener-frontend --build --outDir /frontend/dist
 # === Stage 3: Runtime with Caddy ===
 FROM caddy:2.8-alpine
 
+# Устанавливаем postgres-client для goose и ca-certificates
+RUN apk --no-cache add postgresql-client ca-certificates
+
 # Копируем конфиг Caddy
 COPY Caddyfile /etc/caddy/Caddyfile
 
@@ -31,9 +34,14 @@ COPY --from=frontend-builder /frontend/dist /app/frontend/dist
 # Копируем бэкенд
 COPY --from=backend-builder /app/bin/app /app/bin/app
 
-# Копируем миграции и goose
+# Копируем миграции
 COPY --from=backend-builder /src/db/migrations /app/db/migrations
-COPY --from=backend-builder /go/bin/goose /usr/local/bin/goose
+
+# 🔹 Устанавливаем goose прямо в финальном образе (проще и надёжнее)
+RUN apk add --no-cache git && \
+    go install github.com/pressly/goose/v3/cmd/goose@latest && \
+    mv /go/bin/goose /usr/local/bin/goose && \
+    apk del git
 
 # Скрипт запуска
 COPY bin/run.sh /app/bin/run.sh
