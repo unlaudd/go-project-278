@@ -23,6 +23,9 @@ import (
 func NewRouter() *gin.Engine {
 	router := gin.Default()
 
+	// 🔐 Доверять заголовкам Cloudflare (Render использует CF)
+	router.TrustedPlatform = gin.PlatformCloudflare
+
 	// 🪵 Sentry
 	if dsn := os.Getenv("SENTRY_DSN"); dsn != "" {
 		if err := sentry.Init(sentry.ClientOptions{
@@ -66,6 +69,7 @@ func NewRouter() *gin.Engine {
 		}
 
 		repo := repository.NewLinkRepository(dbConn)
+		visitRepo := repository.NewLinkVisitRepository(dbConn)
 		linkHandler := handler.NewLinkHandler(repo, baseURL)
 
 		// API маршруты
@@ -79,16 +83,42 @@ func NewRouter() *gin.Engine {
 				links.PUT("/:id", linkHandler.Update)
 				links.DELETE("/:id", linkHandler.Delete)
 			}
+			api.GET("/link_visits", handler.NewLinkVisitHandler(visitRepo).List)
 		}
 
-		// Редирект с короткой ссылки
+		// Редирект с записью посещения
 		router.GET("/r/:shortName", func(c *gin.Context) {
 			shortName := c.Param("shortName")
+
+			// Ищем ссылку
 			link, err := repo.GetByShortName(c.Request.Context(), shortName, baseURL)
 			if err != nil {
+				// Записываем попытку доступа к несуществующей ссылке (404)
+				if visitRepo != nil {
+					err := visitRepo.Create(c.Request.Context(), &repository.LinkVisit{
+						LinkID: 0, IP: c.ClientIP(), UserAgent: c.Request.UserAgent(),
+						Referer: c.Request.Referer(), Status: http.StatusNotFound,
+					})
+					if err != nil {
+						log.Printf("Failed to record 404 visit: %v", err)
+					}
+				}
 				c.JSON(http.StatusNotFound, gin.H{"error": "link not found"})
 				return
 			}
+
+			// Записываем успешное посещение (301)
+			if visitRepo != nil {
+				err := visitRepo.Create(c.Request.Context(), &repository.LinkVisit{
+					LinkID: link.ID, IP: c.ClientIP(), UserAgent: c.Request.UserAgent(),
+					Referer: c.Request.Referer(), Status: http.StatusMovedPermanently,
+				})
+				if err != nil {
+					log.Printf("Failed to record redirect visit: %v", err)
+				}
+			}
+
+			// Выполняем редирект
 			c.Redirect(http.StatusMovedPermanently, link.OriginalURL)
 		})
 	}

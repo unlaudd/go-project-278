@@ -14,3 +14,13 @@ type Link struct {
 	ShortName   string       `json:"short_name"`
 	CreatedAt   sql.NullTime `json:"created_at"`
 }
+
+type LinkVisit struct {
+	ID        int32          `json:"id"`
+	LinkID    int32          `json:"link_id"`
+	Ip        string         `json:"ip"`
+	UserAgent sql.NullString `json:"user_agent"`
+	Referer   sql.NullString `json:"referer"`
+	Status    int16          `json:"status"`
+	CreatedAt sql.NullTime   `json:"created_at"`
+}
