@@ -1,59 +1,42 @@
-// cmd/url-shortener/main.go
-package main
+// В NewRouter(), после инициализации Sentry:
 
-import (
-	"log"
-	"net/http"
-	"os"
+// Подключаем БД
+dbConn, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+if err != nil {
+	log.Fatalf("Failed to connect to database: %v", err)
+}
+if err := dbConn.Ping(); err != nil {
+	log.Fatalf("Failed to ping database: %v", err)
+}
+log.Println("[DB] Connected")
 
-	"github.com/getsentry/sentry-go"
-	sentrygin "github.com/getsentry/sentry-go/gin"
-	"github.com/gin-gonic/gin"
-)
+repo := repository.NewLinkRepository(dbConn)
+baseURL := os.Getenv("BASE_URL")
+if baseURL == "" {
+	baseURL = "https://url-shortener-452x.onrender.com" // фолбэк на Render
+}
+linkHandler := handler.NewLinkHandler(repo, baseURL)
 
-// NewRouter создаёт роутер с подключёнными middleware.
-// Вынесен отдельно для удобства тестирования.
-func NewRouter() *gin.Engine {
-	router := gin.Default() // включает Logger + Recovery
-
-	// 🪵 Подключаем Sentry, если задан DSN
-	if dsn := os.Getenv("SENTRY_DSN"); dsn != "" {
-		err := sentry.Init(sentry.ClientOptions{
-			Dsn:         dsn,
-			Environment: os.Getenv("ENVIRONMENT"),
-		})
-		if err != nil {
-			log.Printf("[Sentry] Init failed: %v", err)
-		} else {
-			log.Println("[Sentry] Initialized")
-			router.Use(sentrygin.New(sentrygin.Options{}))
-		}
+// API группа
+api := router.Group("/api")
+{
+	links := api.Group("/links")
+	{
+		links.POST("", linkHandler.Create)
+		links.GET("", linkHandler.List)
+		links.GET("/:id", linkHandler.GetByID)
+		links.PUT("/:id", linkHandler.Update)
+		links.DELETE("/:id", linkHandler.Delete)
 	}
-
-	// ✅ Эндпоинт /ping
-	router.GET("/ping", func(c *gin.Context) {
-		c.String(http.StatusOK, "pong")
-	})
-
-	// 🧪 Тестовый эндпоинт для проверки Sentry
-	router.GET("/debug/error", func(c *gin.Context) {
-	 	panic("test error for Sentry verification")
-	})
-
-	return router
 }
 
-func main() {
-	router := NewRouter()
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+// 🔗 Редирект с короткой ссылки на оригинал
+router.GET("/r/:shortName", func(c *gin.Context) {
+	shortName := c.Param("shortName")
+	link, err := repo.GetByShortName(c.Request.Context(), shortName, "")
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "link not found"})
+		return
 	}
-
-	// Запускаем сервер
-	// Ошибка запуска логируется и завершает процесс
-	if err := router.Run(":" + port); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
-	}
-}
+	c.Redirect(http.StatusMovedPermanently, link.OriginalURL)
+})
