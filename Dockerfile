@@ -20,8 +20,9 @@ RUN go install github.com/pressly/goose/v3/cmd/goose@latest
 
 COPY . .
 
+# Исправленная строка сборки:
 RUN --mount=type=cache,target=/root/.cache/go-build \
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/app .
+  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/app ./cmd/url-shortener
 
 # 3) Runtime
 FROM alpine:3.22
