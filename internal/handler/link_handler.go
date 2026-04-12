@@ -3,11 +3,10 @@ package handler
 import (
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
-	"strings"
 
 	"url-shortener/internal/repository"
+	"url-shortener/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -74,7 +73,7 @@ func (h *LinkHandler) GetByID(c *gin.Context) {
 
 func (h *LinkHandler) List(c *gin.Context) {
 	// Парсим параметр range=[start,end]
-	start, end, err := parseRange(c.Query("range"))
+	start, end, err := utils.ParseRange(c.Query("range"))
 	if err != nil {
 		// Если параметр не указан или некорректен — используем дефолт [0,9] (10 записей)
 		start, end = 0, 9
@@ -169,39 +168,4 @@ func generateShortName(length int) string {
 		result[i] = chars[i%len(chars)]
 	}
 	return string(result)
-}
-
-// parseRange парсит строку вида "[0,10]" в start=0, end=10
-// Возвращает ошибку, если формат некорректен
-func parseRange(rangeParam string) (start, end int, err error) {
-	if rangeParam == "" {
-		return 0, 0, fmt.Errorf("empty range")
-	}
-
-	// Удаляем пробелы: "[0, 10]" → "[0,10]"
-	rangeParam = strings.ReplaceAll(rangeParam, " ", "")
-
-	// Проверяем формат через регексп: [число,число]
-	re := regexp.MustCompile(`^\[(\d+),(\d+)\]$`)
-	matches := re.FindStringSubmatch(rangeParam)
-	if len(matches) != 3 {
-		return 0, 0, fmt.Errorf("invalid range format: %s", rangeParam)
-	}
-
-	start, err = strconv.Atoi(matches[1])
-	if err != nil {
-		return 0, 0, err
-	}
-
-	end, err = strconv.Atoi(matches[2])
-	if err != nil {
-		return 0, 0, err
-	}
-
-	// Валидация: start <= end, start >= 0
-	if start < 0 || end < start {
-		return 0, 0, fmt.Errorf("invalid range values: start=%d, end=%d", start, end)
-	}
-
-	return start, end, nil
 }
