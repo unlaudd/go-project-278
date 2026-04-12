@@ -22,10 +22,10 @@ RUN cp -r /frontend/node_modules/@hexlet/project-url-shortener-frontend/dist /fr
 # === Stage 3: Runtime with Caddy ===
 FROM caddy:2.8-alpine
 
-# Устанавливаем postgres-client для goose и ca-certificates
-RUN apk --no-cache add postgresql-client ca-certificates
+# Устанавливаем зависимости и явно выставляем права на caddy
+RUN apk --no-cache add postgresql-client ca-certificates && \
+    chmod 755 /usr/bin/caddy
 
-# Копируем конфиг Caddy
 COPY Caddyfile /etc/caddy/Caddyfile
 
 # Копируем фронтенд

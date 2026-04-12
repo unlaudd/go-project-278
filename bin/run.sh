@@ -15,4 +15,4 @@ echo "[run.sh] Starting backend on port 9000"
 
 echo "[run.sh] Starting Caddy on port 8080"
 # Используем ПОЛНЫЙ путь к бинарнику caddy
-exec /usr/bin/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
