@@ -236,3 +236,122 @@ func TestCreateLink_Conflict(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, w.Code)
 	repo.AssertExpectations(t)
 }
+
+// 🔹 Тест: пагинация по умолчанию (без параметра range)
+func TestListLinks_DefaultPagination(t *testing.T) {
+	repo := new(mockLinkRepo)
+	h := handler.NewLinkHandler(repo, "https://test.local")
+
+	expectedLinks := make([]*repository.Link, 10) // дефолт: 10 записей [0,9]
+	for i := range expectedLinks {
+		expectedLinks[i] = &repository.Link{ID: int32(i + 1)}
+	}
+
+	repo.On("List", mock.Anything, int32(10), int32(0), "https://test.local").Return(expectedLinks, nil)
+	repo.On("Count", mock.Anything).Return(int64(42), nil)
+
+	w := httptest.NewRecorder()
+	c, _ := createTestContext(w, "GET", "/api/links", nil)
+
+	h.List(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	// Проверяем заголовок Content-Range
+	assert.Equal(t, "links 0-9/42", w.Header().Get("Content-Range"))
+	repo.AssertExpectations(t)
+}
+
+// 🔹 Тест: пагинация с параметром range=[5,10]
+func TestListLinks_WithRange(t *testing.T) {
+	repo := new(mockLinkRepo)
+	h := handler.NewLinkHandler(repo, "https://test.local")
+
+	expectedLinks := make([]*repository.Link, 6) // [5,10] → 6 записей
+	for i := range expectedLinks {
+		expectedLinks[i] = &repository.Link{ID: int32(i + 5)}
+	}
+
+	repo.On("List", mock.Anything, int32(6), int32(5), "https://test.local").Return(expectedLinks, nil)
+	repo.On("Count", mock.Anything).Return(int64(20), nil)
+
+	w := httptest.NewRecorder()
+	c, _ := createTestContext(w, "GET", "/api/links?range=[5,10]", nil)
+
+	h.List(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "links 5-10/20", w.Header().Get("Content-Range"))
+	repo.AssertExpectations(t)
+}
+
+// 🔹 Тест: некорректный формат range → дефолтная пагинация
+func TestListLinks_InvalidRange_UsesDefault(t *testing.T) {
+	repo := new(mockLinkRepo)
+	h := handler.NewLinkHandler(repo, "https://test.local")
+
+	expectedLinks := make([]*repository.Link, 10)
+	repo.On("List", mock.Anything, int32(10), int32(0), "https://test.local").Return(expectedLinks, nil)
+	repo.On("Count", mock.Anything).Return(int64(15), nil)
+
+	w := httptest.NewRecorder()
+	// Некорректный формат: нет квадратных скобок
+	c, _ := createTestContext(w, "GET", "/api/links?range=5,10", nil)
+
+	h.List(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	// Должна сработать дефолтная пагинация [0,9]
+	assert.Equal(t, "links 0-9/15", w.Header().Get("Content-Range"))
+	repo.AssertExpectations(t)
+}
+
+// 🔹 Тест: пустой результат пагинации
+func TestListLinks_EmptyResult(t *testing.T) {
+	repo := new(mockLinkRepo)
+	h := handler.NewLinkHandler(repo, "https://test.local")
+
+	repo.On("List", mock.Anything, int32(10), int32(100), "https://test.local").Return([]*repository.Link{}, nil)
+	repo.On("Count", mock.Anything).Return(int64(50), nil)
+
+	w := httptest.NewRecorder()
+	c, _ := createTestContext(w, "GET", "/api/links?range=[100,109]", nil)
+
+	h.List(c)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	// Пустой результат: start-(start-1)/total
+	assert.Equal(t, "links 100-99/50", w.Header().Get("Content-Range"))
+	repo.AssertExpectations(t)
+}
+
+// 🔹 Тест: парсинг range
+func TestParseRange(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantStart int
+		wantEnd   int
+		wantErr   bool
+	}{
+		{"valid no spaces", "[0,10]", 0, 10, false},
+		{"valid with spaces", "[5, 15]", 5, 15, false},
+		{"single element", "[3,3]", 3, 3, false},
+		{"empty", "", 0, 0, true},
+		{"no brackets", "0,10", 0, 0, true},
+		{"negative start", "[-1,10]", 0, 0, true},
+		{"end before start", "[10,5]", 0, 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			start, end, err := handler.ParseRangeForTest(tt.input) // см. примечание ниже
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.wantStart, start)
+				assert.Equal(t, tt.wantEnd, end)
+			}
+		})
+	}
+}

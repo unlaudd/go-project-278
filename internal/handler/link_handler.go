@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"url-shortener/internal/repository"
 
@@ -70,23 +73,37 @@ func (h *LinkHandler) GetByID(c *gin.Context) {
 }
 
 func (h *LinkHandler) List(c *gin.Context) {
-	limit, offset := int32(100), int32(0)
-	if l := c.Query("limit"); l != "" {
-		if v, err := strconv.Atoi(l); err == nil && v > 0 {
-			limit = int32(v)
-		}
-	}
-	if o := c.Query("offset"); o != "" {
-		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
-			offset = int32(v)
-		}
+	// Парсим параметр range=[start,end]
+	start, end, err := parseRange(c.Query("range"))
+	if err != nil {
+		// Если параметр не указан или некорректен — используем дефолт [0,9] (10 записей)
+		start, end = 0, 9
 	}
 
-	links, err := h.repo.List(c.Request.Context(), limit, offset, h.baseURL)
+	limit := end - start + 1 // inclusive: [0,10] → 11 записей
+	offset := start
+
+	links, err := h.repo.List(c.Request.Context(), int32(limit), int32(offset), h.baseURL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list links"})
 		return
 	}
+
+	// Получаем общее количество для заголовка Content-Range
+	total, err := h.repo.Count(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count links"})
+		return
+	}
+
+	// Формируем заголовок Content-Range: links start-end/total
+	// Пример: Content-Range: links 0-10/42
+	actualEnd := start + len(links) - 1
+	if len(links) == 0 {
+		actualEnd = start - 1 // пустой результат: 0-(-1)/0
+	}
+	c.Header("Content-Range", fmt.Sprintf("links %d-%d/%d", start, actualEnd, total))
+
 	c.JSON(http.StatusOK, links)
 }
 
@@ -152,4 +169,39 @@ func generateShortName(length int) string {
 		result[i] = chars[i%len(chars)]
 	}
 	return string(result)
+}
+
+// parseRange парсит строку вида "[0,10]" в start=0, end=10
+// Возвращает ошибку, если формат некорректен
+func parseRange(rangeParam string) (start, end int, err error) {
+	if rangeParam == "" {
+		return 0, 0, fmt.Errorf("empty range")
+	}
+
+	// Удаляем пробелы: "[0, 10]" → "[0,10]"
+	rangeParam = strings.ReplaceAll(rangeParam, " ", "")
+
+	// Проверяем формат через регексп: [число,число]
+	re := regexp.MustCompile(`^\[(\d+),(\d+)\]$`)
+	matches := re.FindStringSubmatch(rangeParam)
+	if len(matches) != 3 {
+		return 0, 0, fmt.Errorf("invalid range format: %s", rangeParam)
+	}
+
+	start, err = strconv.Atoi(matches[1])
+	if err != nil {
+		return 0, 0, err
+	}
+
+	end, err = strconv.Atoi(matches[2])
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// Валидация: start <= end, start >= 0
+	if start < 0 || end < start {
+		return 0, 0, fmt.Errorf("invalid range values: start=%d, end=%d", start, end)
+	}
+
+	return start, end, nil
 }

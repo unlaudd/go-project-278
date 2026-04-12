@@ -23,6 +23,8 @@ type LinkRepository interface {
 	List(ctx context.Context, limit, offset int32, baseURL string) ([]*Link, error)
 	Update(ctx context.Context, id int32, originalURL, shortName *string, baseURL string) (*Link, error)
 	Delete(ctx context.Context, id int32) error
+
+	Count(ctx context.Context) (int64, error)
 }
 
 type linkRepository struct {
@@ -147,4 +149,9 @@ func (r *linkRepository) Delete(ctx context.Context, id int32) error {
 		return err
 	}
 	return r.queries.DeleteLink(ctx, id)
+}
+
+// Count возвращает общее количество ссылок в БД
+func (r *linkRepository) Count(ctx context.Context) (int64, error) {
+	return r.queries.CountLinks(ctx)
 }
