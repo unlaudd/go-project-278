@@ -12,12 +12,17 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/bin/app ./cmd/url-sho
 # === Stage 2: Build Frontend ===
 FROM node:20-alpine AS frontend-builder
 WORKDIR /frontend
-# Копируем только package-файлы для кэширования зависимостей
+
+# Копируем только package-файлы для кэширования
 COPY package*.json ./
 RUN npm ci
-# Копируем остальное и билдим
+
+# Копируем исходники фронтенда
 COPY . .
-RUN npx start-hexlet-url-shortener-frontend --build --outDir /frontend/dist
+
+# ИСПРАВЛЕНИЕ: используем vite build вместо start-... --build
+# Vite по умолчанию кладет сборку в ./dist
+RUN npx vite build --outDir /frontend/dist
 
 # === Stage 3: Runtime with Caddy ===
 FROM caddy:2.8-alpine
