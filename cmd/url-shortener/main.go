@@ -19,27 +19,30 @@ import (
 	"url-shortener/internal/repository"
 )
 
-// NewRouter создаёт роутер с подключёнными middleware и API
+// NewRouter initializes and configures the Gin router with middleware,
+// database connections, and API route handlers.
 func NewRouter() *gin.Engine {
 	router := gin.Default()
 
-	// 🔐 Доверять заголовкам Cloudflare (Render использует CF)
+	// Trust Cloudflare headers for accurate client IP resolution
+	// when the app runs behind Render's proxy.
 	router.TrustedPlatform = gin.PlatformCloudflare
 
-	// 🪵 Sentry
+	// Initialize Sentry for error tracking if DSN is provided.
 	if dsn := os.Getenv("SENTRY_DSN"); dsn != "" {
 		if err := sentry.Init(sentry.ClientOptions{
 			Dsn:         dsn,
 			Environment: os.Getenv("ENVIRONMENT"),
 		}); err != nil {
-			log.Printf("[Sentry] Init failed: %v", err)
+			log.Printf("Sentry initialization failed: %v", err)
 		} else {
-			log.Println("[Sentry] Initialized")
+			log.Println("Sentry initialized")
 			router.Use(sentrygin.New(sentrygin.Options{}))
 		}
 	}
 
-	// 🔐 CORS для локальной разработки
+	// Configure CORS middleware for local development.
+	// Allows requests from the frontend dev server at localhost:5173.
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -49,19 +52,19 @@ func NewRouter() *gin.Engine {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	// 🗃️ Подключаем БД
+	// Initialize database connection if DATABASE_URL is set.
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		log.Println("[DB] DATABASE_URL not set, skipping DB setup (local mode)")
+		log.Println("DATABASE_URL not set, skipping DB setup (local mode)")
 	} else {
 		dbConn, err := sql.Open("postgres", dbURL)
 		if err != nil {
-			log.Fatalf("Failed to connect to DB: %v", err)
+			log.Fatalf("Failed to connect to database: %v", err)
 		}
 		if err := dbConn.Ping(); err != nil {
-			log.Fatalf("Failed to ping DB: %v", err)
+			log.Fatalf("Failed to ping database: %v", err)
 		}
-		log.Println("[DB] Connected")
+		log.Println("Database connected")
 
 		baseURL := os.Getenv("BASE_URL")
 		if baseURL == "" {
@@ -72,7 +75,7 @@ func NewRouter() *gin.Engine {
 		visitRepo := repository.NewLinkVisitRepository(dbConn)
 		linkHandler := handler.NewLinkHandler(repo, baseURL)
 
-		// API маршруты
+		// Register API route group.
 		api := router.Group("/api")
 		{
 			links := api.Group("/links")
@@ -83,17 +86,18 @@ func NewRouter() *gin.Engine {
 				links.PUT("/:id", linkHandler.Update)
 				links.DELETE("/:id", linkHandler.Delete)
 			}
+			// Endpoint for listing link visits with pagination.
 			api.GET("/link_visits", handler.NewLinkVisitHandler(visitRepo).List)
 		}
 
-		// Редирект с записью посещения
+		// Redirect endpoint with visit tracking.
+		// Records analytics (IP, user agent, referer, status) before redirecting.
 		router.GET("/r/:shortName", func(c *gin.Context) {
 			shortName := c.Param("shortName")
 
-			// Ищем ссылку
 			link, err := repo.GetByShortName(c.Request.Context(), shortName, baseURL)
 			if err != nil {
-				// Записываем попытку доступа к несуществующей ссылке (404)
+				// Record failed lookup attempt (404) for analytics.
 				if visitRepo != nil {
 					err := visitRepo.Create(c.Request.Context(), &repository.LinkVisit{
 						LinkID: 0, IP: c.ClientIP(), UserAgent: c.Request.UserAgent(),
@@ -107,7 +111,7 @@ func NewRouter() *gin.Engine {
 				return
 			}
 
-			// Записываем успешное посещение (301)
+			// Record successful redirect (301) for analytics.
 			if visitRepo != nil {
 				err := visitRepo.Create(c.Request.Context(), &repository.LinkVisit{
 					LinkID: link.ID, IP: c.ClientIP(), UserAgent: c.Request.UserAgent(),
@@ -118,17 +122,17 @@ func NewRouter() *gin.Engine {
 				}
 			}
 
-			// Выполняем редирект
 			c.Redirect(http.StatusMovedPermanently, link.OriginalURL)
 		})
 	}
 
-	// ✅ Старый эндпоинт /ping
+	// Health check endpoint for load balancers and monitoring.
 	router.GET("/ping", func(c *gin.Context) {
 		c.String(http.StatusOK, "pong")
 	})
 
-	// 🧪 Тестовый эндпоинт Sentry (раскомментируйте при необходимости)
+	// Debug endpoint for testing Sentry error reporting.
+	// Should be disabled or protected in production.
 	router.GET("/debug/error", func(c *gin.Context) {
 		panic("test error for Sentry verification")
 	})
@@ -139,7 +143,8 @@ func NewRouter() *gin.Engine {
 func main() {
 	router := NewRouter()
 
-	// В продакшене слушаем на 8080 (Caddy проксирует на этот порт)
+	// Determine backend port: use env var or default to 8080.
+	// In production, Caddy proxies external traffic to this port.
 	port := os.Getenv("BACKEND_PORT")
 	if port == "" {
 		port = "8080"
@@ -147,6 +152,6 @@ func main() {
 
 	log.Printf("Backend starting on port %s", port)
 	if err := router.Run(":" + port); err != nil {
-		log.Fatalf("Server failed: %v", err)
+		log.Fatalf("Server failed to start: %v", err)
 	}
 }

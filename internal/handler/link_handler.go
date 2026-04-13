@@ -1,3 +1,4 @@
+// Package handler provides HTTP handlers for the link shortener API.
 package handler
 
 import (
@@ -7,22 +8,26 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gin-gonic/gin"
+
 	"url-shortener/internal/repository"
 	"url-shortener/internal/utils"
-
-	"github.com/gin-gonic/gin"
 )
 
+// LinkHandler handles HTTP requests for link resources.
 type LinkHandler struct {
 	repo    repository.LinkRepository
 	baseURL string
 }
 
+// NewLinkHandler creates a new LinkHandler with the given repository and base URL
+// for constructing short link addresses.
 func NewLinkHandler(repo repository.LinkRepository, baseURL string) *LinkHandler {
 	return &LinkHandler{repo: repo, baseURL: baseURL}
 }
 
-// POST /api/links
+// Create handles POST /api/links — creates a new shortened link.
+// Validates input, generates a short name if not provided, and returns 201 Created.
 func (h *LinkHandler) Create(c *gin.Context) {
 	var req struct {
 		OriginalURL string  `json:"original_url" binding:"required,url"`
@@ -34,29 +39,27 @@ func (h *LinkHandler) Create(c *gin.Context) {
 		return
 	}
 
-	// Генерируем short_name, если не передан или пустой
+	// Generate a random short name if the client did not provide one.
 	shortName := req.ShortName
 	if shortName == nil || *shortName == "" {
 		gen := generateShortName()
 		shortName = &gen
 	}
 
-	// Создаём структуру ссылки
 	link := &repository.Link{
 		OriginalURL: req.OriginalURL,
 		ShortName:   *shortName,
 	}
 
-	// repo.Create возвращает только error
 	if err := h.repo.Create(c.Request.Context(), link, h.baseURL); err != nil {
 		handleDBError(c, err)
 		return
 	}
 
-	// Возвращаем 201 + заполненную ссылку
 	c.JSON(http.StatusCreated, link)
 }
 
+// GetByID handles GET /api/links/:id — retrieves a link by its numeric ID.
 func (h *LinkHandler) GetByID(c *gin.Context) {
 	id, err := parseID(c.Param("id"))
 	if err != nil {
@@ -66,6 +69,7 @@ func (h *LinkHandler) GetByID(c *gin.Context) {
 
 	link, err := h.repo.GetByID(c.Request.Context(), id, h.baseURL)
 	if err != nil {
+		// Simple string comparison for "not found" — consider using errors.Is in production.
 		if err.Error() == "link not found" {
 			c.JSON(http.StatusNotFound, gin.H{"error": "link not found"})
 			return
@@ -76,15 +80,17 @@ func (h *LinkHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, link)
 }
 
+// List handles GET /api/links — returns a paginated list of links.
+// Supports RFC 7233-style Range header via query parameter: ?range=[start,end].
 func (h *LinkHandler) List(c *gin.Context) {
-	// Парсим параметр range=[start,end]
 	start, end, err := utils.ParseRange(c.Query("range"))
 	if err != nil {
-		// Если параметр не указан или некорректен — используем дефолт [0,9] (10 записей)
+		// Fall back to default range [0,9] if parameter is missing or malformed.
 		start, end = 0, 9
 	}
 
-	limit := end - start + 1 // inclusive: [0,10] → 11 записей
+	// Range is inclusive: [0,10] means 11 items.
+	limit := end - start + 1
 	offset := start
 
 	links, err := h.repo.List(c.Request.Context(), int32(limit), int32(offset), h.baseURL)
@@ -93,24 +99,25 @@ func (h *LinkHandler) List(c *gin.Context) {
 		return
 	}
 
-	// Получаем общее количество для заголовка Content-Range
 	total, err := h.repo.Count(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to count links"})
 		return
 	}
 
-	// Формируем заголовок Content-Range: links start-end/total
-	// Пример: Content-Range: links 0-10/42
+	// Format Content-Range header per RFC 7233: "links start-end/total".
+	// For empty results, use "start-(start-1)/total" to indicate no content in range.
 	actualEnd := start + len(links) - 1
 	if len(links) == 0 {
-		actualEnd = start - 1 // пустой результат: 0-(-1)/0
+		actualEnd = start - 1
 	}
 	c.Header("Content-Range", fmt.Sprintf("links %d-%d/%d", start, actualEnd, total))
 
 	c.JSON(http.StatusOK, links)
 }
 
+// Update handles PUT /api/links/:id — updates an existing link.
+// Fields are optional: only provided fields are updated.
 func (h *LinkHandler) Update(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseInt(idStr, 10, 32)
@@ -138,6 +145,8 @@ func (h *LinkHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, link)
 }
 
+// Delete handles DELETE /api/links/:id — removes a link by ID.
+// Returns 204 No Content on success.
 func (h *LinkHandler) Delete(c *gin.Context) {
 	id, err := parseID(c.Param("id"))
 	if err != nil {
@@ -156,11 +165,14 @@ func (h *LinkHandler) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// parseID converts a string ID from the URL path to int32.
 func parseID(s string) (int32, error) {
 	v, err := strconv.ParseInt(s, 10, 32)
 	return int32(v), err
 }
 
+// generateShortName creates a random 8-character alphanumeric string.
+// Note: Uses math/rand, which is not cryptographically secure — acceptable for short names.
 func generateShortName() string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, 8)

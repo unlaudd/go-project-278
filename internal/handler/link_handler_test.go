@@ -14,15 +14,19 @@ import (
 	"strings"
 	"testing"
 
-	"url-shortener/url-shortener/internal/handler"
-	"url-shortener/url-shortener/internal/repository"
-
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	// Note: Verify import path matches your go.mod module name.
+	// If your module is "url-shortener", the path should be:
+	// "url-shortener/internal/handler" and "url-shortener/internal/repository"
+	"url-shortener/internal/handler"
+	"url-shortener/internal/repository"
 )
 
-// 🔹 Моковый репозиторий
+// mockLinkRepo is a test double for repository.LinkRepository.
+// It uses stretchr/testify/mock to record calls and stub return values.
 type mockLinkRepo struct {
 	mock.Mock
 }
@@ -69,7 +73,8 @@ func (m *mockLinkRepo) Delete(ctx context.Context, id int64) error {
 	return args.Error(0)
 }
 
-// 🔹 Вспомогательная функция для создания тестового контекста Gin
+// createTestContext initializes a Gin context and HTTP request for unit testing handlers.
+// It sets the request method, path, optional JSON body, and Content-Type header.
 func createTestContext(w *httptest.ResponseRecorder, method, path string, body []byte) (*gin.Context, *http.Request) {
 	gin.SetMode(gin.TestMode)
 	req := httptest.NewRequest(method, path, bytes.NewReader(body))
@@ -82,7 +87,8 @@ func createTestContext(w *httptest.ResponseRecorder, method, path string, body [
 	return c, req
 }
 
-// 🔹 Тест: POST /api/links — создание ссылки
+// TestCreateLink verifies that a valid link creation request returns 201 Created
+// and that the repository is called with the expected parameters.
 func TestCreateLink(t *testing.T) {
 	repo := new(mockLinkRepo)
 	h := handler.NewLinkHandler(repo, "https://test.local")
@@ -96,7 +102,7 @@ func TestCreateLink(t *testing.T) {
 
 	repo.On("Create", mock.Anything, mock.AnythingOfType("*repository.Link"), "https://test.local").
 		Run(func(args mock.Arguments) {
-			// Проверяем, что short_name сгенерировался, если не передан
+			// Verify that the handler passes the correct original_url to the repository.
 			link := args.Get(1).(*repository.Link)
 			assert.Equal(t, "https://example.com", link.OriginalURL)
 		}).
@@ -111,7 +117,7 @@ func TestCreateLink(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-// 🔹 Тест: GET /api/links/:id — получение по ID
+// TestGetLinkByID verifies successful retrieval of a link by its numeric ID.
 func TestGetLinkByID(t *testing.T) {
 	repo := new(mockLinkRepo)
 	h := handler.NewLinkHandler(repo, "https://test.local")
@@ -138,7 +144,7 @@ func TestGetLinkByID(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-// 🔹 Тест: GET /api/links/:id — 404 если не найдено
+// TestGetLinkByID_NotFound verifies that a missing link returns 404 Not Found.
 func TestGetLinkByID_NotFound(t *testing.T) {
 	repo := new(mockLinkRepo)
 	h := handler.NewLinkHandler(repo, "https://test.local")
@@ -156,7 +162,7 @@ func TestGetLinkByID_NotFound(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-// 🔹 Тест: GET /api/links — список ссылок
+// TestListLinks verifies that the list endpoint returns a JSON array of links.
 func TestListLinks(t *testing.T) {
 	repo := new(mockLinkRepo)
 	h := handler.NewLinkHandler(repo, "https://test.local")
@@ -180,7 +186,7 @@ func TestListLinks(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-// 🔹 Тест: PUT /api/links/:id — обновление
+// TestUpdateLink verifies that a valid update request returns 200 OK with the updated link.
 func TestUpdateLink(t *testing.T) {
 	repo := new(mockLinkRepo)
 	h := handler.NewLinkHandler(repo, "https://test.local")
@@ -205,7 +211,7 @@ func TestUpdateLink(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-// 🔹 Тест: DELETE /api/links/:id — удаление
+// TestDeleteLink verifies that deleting an existing link returns 204 No Content.
 func TestDeleteLink(t *testing.T) {
 	repo := new(mockLinkRepo)
 	h := handler.NewLinkHandler(repo, "https://test.local")
@@ -222,7 +228,8 @@ func TestDeleteLink(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-// 🔹 Тест: Конфликт short_name при создании
+// TestCreateLink_Conflict verifies that a duplicate short_name returns 409 Conflict.
+// Note: Ensure your handler maps repository unique-violation errors to http.StatusConflict.
 func TestCreateLink_Conflict(t *testing.T) {
 	repo := new(mockLinkRepo)
 	h := handler.NewLinkHandler(repo, "https://test.local")
@@ -239,12 +246,13 @@ func TestCreateLink_Conflict(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-// 🔹 Тест: пагинация по умолчанию (без параметра range)
+// TestListLinks_DefaultPagination verifies that omitting the range parameter
+// defaults to fetching the first 10 records [0,9] and sets the Content-Range header.
 func TestListLinks_DefaultPagination(t *testing.T) {
 	repo := new(mockLinkRepo)
 	h := handler.NewLinkHandler(repo, "https://test.local")
 
-	expectedLinks := make([]*repository.Link, 10) // дефолт: 10 записей [0,9]
+	expectedLinks := make([]*repository.Link, 10)
 	for i := range expectedLinks {
 		expectedLinks[i] = &repository.Link{ID: int32(i + 1)}
 	}
@@ -258,17 +266,17 @@ func TestListLinks_DefaultPagination(t *testing.T) {
 	h.List(c)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	// Проверяем заголовок Content-Range
 	assert.Equal(t, "links 0-9/42", w.Header().Get("Content-Range"))
 	repo.AssertExpectations(t)
 }
 
-// 🔹 Тест: пагинация с параметром range=[5,10]
+// TestListLinks_WithRange verifies that a valid range=[5,10] query parameter
+// fetches exactly 6 records and sets the correct Content-Range header.
 func TestListLinks_WithRange(t *testing.T) {
 	repo := new(mockLinkRepo)
 	h := handler.NewLinkHandler(repo, "https://test.local")
 
-	expectedLinks := make([]*repository.Link, 6) // [5,10] → 6 записей
+	expectedLinks := make([]*repository.Link, 6)
 	for i := range expectedLinks {
 		expectedLinks[i] = &repository.Link{ID: int32(i + 5)}
 	}
@@ -286,7 +294,8 @@ func TestListLinks_WithRange(t *testing.T) {
 	repo.AssertExpectations(t)
 }
 
-// 🔹 Тест: некорректный формат range → дефолтная пагинация
+// TestListLinks_InvalidRange_UsesDefault verifies that malformed range parameters
+// fall back to the default pagination [0,9] instead of returning an error.
 func TestListLinks_InvalidRange_UsesDefault(t *testing.T) {
 	repo := new(mockLinkRepo)
 	h := handler.NewLinkHandler(repo, "https://test.local")
@@ -296,18 +305,19 @@ func TestListLinks_InvalidRange_UsesDefault(t *testing.T) {
 	repo.On("Count", mock.Anything).Return(int64(15), nil)
 
 	w := httptest.NewRecorder()
-	// Некорректный формат: нет квадратных скобок
+	// Malformed: missing square brackets
 	c, _ := createTestContext(w, "GET", "/api/links?range=5,10", nil)
 
 	h.List(c)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	// Должна сработать дефолтная пагинация [0,9]
 	assert.Equal(t, "links 0-9/15", w.Header().Get("Content-Range"))
 	repo.AssertExpectations(t)
 }
 
-// 🔹 Тест: пустой результат пагинации
+// TestListLinks_EmptyResult verifies the Content-Range header format when
+// the requested range contains no records (start > total).
+// Expected format: "links start-(start-1)/total" per RFC 7233.
 func TestListLinks_EmptyResult(t *testing.T) {
 	repo := new(mockLinkRepo)
 	h := handler.NewLinkHandler(repo, "https://test.local")
@@ -321,12 +331,13 @@ func TestListLinks_EmptyResult(t *testing.T) {
 	h.List(c)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	// Пустой результат: start-(start-1)/total
 	assert.Equal(t, "links 100-99/50", w.Header().Get("Content-Range"))
 	repo.AssertExpectations(t)
 }
 
-// 🔹 Тест: парсинг range
+// TestParseRange validates the range parameter parser with valid and invalid inputs.
+// Note: This test assumes ParseRangeForTest is exported from the handler package
+// for testing purposes. If not, consider testing parseRange indirectly via HTTP tests.
 func TestParseRange(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -346,7 +357,7 @@ func TestParseRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			start, end, err := handler.ParseRangeForTest(tt.input) // см. примечание ниже
+			start, end, err := handler.ParseRangeForTest(tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -358,7 +369,8 @@ func TestParseRange(t *testing.T) {
 	}
 }
 
-// Тест: невалидный URL
+// TestCreateLink_InvalidURL verifies that a request with a malformed URL
+// returns 422 Unprocessable Entity with a validation error message.
 func TestCreateLink_InvalidURL(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := createTestContext(w, "POST", "/api/links", nil)
