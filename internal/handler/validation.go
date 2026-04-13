@@ -19,7 +19,15 @@ func handleBindError(c *gin.Context, err error) {
 		// Format validation errors as {"errors": {"field": "message"}} per API spec.
 		errs := make(map[string]string)
 		for _, e := range validationErrs {
-			errs[e.Field()] = e.Error()
+			// Map Go struct field names to JSON tag names for consistent API responses.
+			jsonField := e.Field()
+			switch e.Field() {
+			case "OriginalURL":
+				jsonField = "original_url"
+			case "ShortName":
+				jsonField = "short_name"
+			}
+			errs[jsonField] = e.Error()
 		}
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": errs})
 		return
