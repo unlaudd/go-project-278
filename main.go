@@ -5,13 +5,17 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"reflect"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
+	"github.com/go-playground/validator"
 
 	"github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	_ "github.com/joho/godotenv/autoload"
 	_ "github.com/lib/pq"
 
@@ -23,6 +27,16 @@ import (
 // database connections, and API route handlers.
 func NewRouter() *gin.Engine {
 	router := gin.Default()
+
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		v.RegisterTagNameFunc(func(fld reflect.StructField) string {
+			name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+			if name == "-" {
+				return ""
+			}
+			return name
+		})
+	}
 
 	// Trust Cloudflare headers for accurate client IP resolution
 	// when the app runs behind Render's proxy.

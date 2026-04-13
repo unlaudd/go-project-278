@@ -138,6 +138,10 @@ func (h *LinkHandler) Update(c *gin.Context) {
 
 	link, err := h.repo.Update(c.Request.Context(), int32(id), req.OriginalURL, req.ShortName, h.baseURL)
 	if err != nil {
+		if err.Error() == "link not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "link not found"})
+			return
+		}
 		handleDBError(c, err)
 		return
 	}
