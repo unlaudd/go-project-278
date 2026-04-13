@@ -39,7 +39,7 @@ COPY . .
 # Build a statically linked, production-ready binary for Linux amd64.
 # CGO_ENABLED=0 ensures no dynamic C dependencies; cache mount speeds up compilation.
 RUN --mount=type=cache,target=/root/.cache/go-build \
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/app ./cmd/url-shortener
+  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/app .
 
 # =============================================================================
 # Stage 3: Runtime image (minimal Alpine with Caddy reverse proxy)

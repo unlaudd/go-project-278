@@ -67,10 +67,6 @@ func (r *linkRepository) Create(ctx context.Context, link *Link, baseURL string)
 		ShortName:   link.ShortName,
 	})
 	if err != nil {
-		// Simple string matching for uniqueness error — consider using errors.As with pq.Error in production.
-		if strings.Contains(err.Error(), "duplicate key") {
-			return errors.New("short_name already exists")
-		}
 		return err
 	}
 	link.ID = res.ID

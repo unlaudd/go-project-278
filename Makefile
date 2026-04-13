@@ -3,7 +3,7 @@
 # Run `make help` to list all available commands.
 
 BINARY_NAME=shortener
-CMD_PATH=./cmd/url-shortener
+CMD_PATH=.
 BIN_PATH=./bin/$(BINARY_NAME)
 
 # Mark all targets as phony to avoid conflicts with files of the same name.
